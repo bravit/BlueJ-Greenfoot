@@ -426,7 +426,7 @@ public class FlowEditor extends ScopeColorsBorderPane implements TextEditor, Flo
         this.flowEditorPane = new FlowEditorPane("", this);
         this.document = flowEditorPane.getDocument();
         this.document.addListener(false, this);
-        this.javaSyntaxView = new JavaSyntaxView(document, flowEditorPane, this, parentResolver, syntaxHighlighting);
+        this.javaSyntaxView = new JavaSyntaxView(document, flowEditorPane, this, parentResolver, syntaxHighlighting, flowSource.toSourceType());
         this.flowEditorPane.setErrorQuery(errorManager);
         this.undoManager = new UndoManager(document);
         this.fetchTabbedEditor = fetchTabbedEditor;
@@ -1163,7 +1163,7 @@ public class FlowEditor extends ScopeColorsBorderPane implements TextEditor, Flo
                 getSourcePane().positionCaret(0);
                 undoManager.forgetHistory();
 
-                if (flowSource == FlowSource.Java)
+                if (flowSource == FlowSource.Java || flowSource == FlowSource.Kotlin)
                 {
                     javaSyntaxView.enableParser(false);
                 }
@@ -3547,7 +3547,7 @@ public class FlowEditor extends ScopeColorsBorderPane implements TextEditor, Flo
             {
                 return lineDisplay.calculateLineWidth(content);
             }
-        }, flowEditorPaneListener, this.javaSyntaxView.getEntityResolver(), PrefMgr.flagProperty(PrefMgr.HIGHLIGHTING));
+        }, flowEditorPaneListener, this.javaSyntaxView.getEntityResolver(), PrefMgr.flagProperty(PrefMgr.HIGHLIGHTING), flowSource.toSourceType());
         javaSyntaxView.enableParser(true);
         StyledLines allLines = new StyledLines(doc, lineStylerWrapper[0]);
         lineContainer.getChildren().setAll(lineDisplay.recalculateVisibleLines(allLines, Math::ceil, 0, printerJob.getJobSettings().getPageLayout().getPrintableWidth(), lineContainer.getHeight(), true, null));
