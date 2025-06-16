@@ -24,7 +24,7 @@ package bluej.parser.lexer;
 import java.util.LinkedList;
 import java.util.List;
 
-import bluej.parser.JavaParser;
+import bluej.parser.JavaParserCallbacks;
 import bluej.parser.TokenStream;
 
 
@@ -41,20 +41,20 @@ public final class JavaTokenFilter implements TokenStream
     private LocatableToken cachedToken;
     private List<LocatableToken> buffer = new LinkedList<LocatableToken>();
     private LinkedList<LocatableToken> recent = new LinkedList<>();
-    private JavaParser parser;
-    
+    private JavaParserCallbacks parser;
+
     public JavaTokenFilter(TokenStream source)
     {
         sourceStream = source;
         lastComment = null;
     }
     
-    public JavaTokenFilter(TokenStream source, JavaParser parser)
+    public JavaTokenFilter(TokenStream source, JavaParserCallbacks parser)
     {
         this(source);
         this.parser = parser;
     }
-        
+
     public LocatableToken nextToken()
     {
         LocatableToken rval;

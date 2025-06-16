@@ -39,7 +39,7 @@ dependencies {
     testImplementation 'org.hamcrest:hamcrest-library:1.3'
     testImplementation 'org.testfx:testfx-core:4.0.15-alpha'
     testImplementation 'org.testfx:testfx-junit:4.0.15-alpha'
-    testImplementation 'org.testfx:openjfx-monocle:jdk-12.0.1+2'
+    testImplementation 'io.github.sebivenlo:openjfx-monocle:jdk-21.0.1'
 }
 
 compileJava {
@@ -68,7 +68,7 @@ test {
                     '-Dmonocle.platform=Headless',
                     '-Dheadless.geometry=1920x1200-32'] : [
                     // Headed:
-                    '-Djava.awt.headless=true',
+                    '-Djava.awt.headless=false',
                     '-Dtestfx.robot=glass',
                     '-Dprism.text=t2k',
             ])

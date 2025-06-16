@@ -1,21 +1,21 @@
 /*
  This file is part of the BlueJ program. 
  Copyright (C) 1999-2009,2010,2011,2013,2014,2016,2023  Michael Kolling and John Rosenberg 
- 
+
  This program is free software; you can redistribute it and/or 
  modify it under the terms of the GNU General Public License 
  as published by the Free Software Foundation; either version 2 
  of the License, or (at your option) any later version. 
- 
+
  This program is distributed in the hope that it will be useful, 
  but WITHOUT ANY WARRANTY; without even the implied warranty of 
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the 
  GNU General Public License for more details. 
- 
+
  You should have received a copy of the GNU General Public License 
  along with this program; if not, write to the Free Software 
  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
- 
+
  This file is subject to the Classpath exception as provided in the  
  LICENSE.txt file that accompanied this code.
  */
@@ -33,6 +33,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 
+import bluej.extensions2.SourceType;
 import threadchecker.OnThread;
 import threadchecker.Tag;
 import bluej.debugger.gentype.GenTypeClass;
@@ -56,6 +57,9 @@ import bluej.parser.symtab.ClassInfo;
 import bluej.parser.symtab.Selection;
 import bluej.pkgmgr.Package;
 import bluej.utility.JavaNames;
+
+import static bluej.parser.JavaParser.TYPEDEF_ENUM;
+import static bluej.parser.JavaParser.TYPEDEF_INTERFACE;
 
 /**
  * The main BlueJ parser, which extracts various information from source code including:
@@ -90,13 +94,13 @@ public class InfoParser extends EditorParser
     private boolean modAbstract = false;
     private List<MethodDesc> methodDescs = new LinkedList<MethodDesc>();
     private MethodDesc currentMethod;
-    
+
     private JavaEntity superclassEntity;
-    
+
     private List<JavaEntity> interfaceEntities;
     //private List<Selection> interfaceSelections;
     private List<JavaEntity> permitsEntities;
-    
+
     /** Represents a method description */
     class MethodDesc
     {
@@ -106,7 +110,7 @@ public class InfoParser extends EditorParser
         String paramNames; // space separated list
         String javadocText;
     }
-    
+
     /** Represents an unresolved value identifier expression */
     class UnresolvedVal
     {
@@ -115,11 +119,11 @@ public class InfoParser extends EditorParser
         Reflective accessSource;
         int accessPosition;
     }
-    
+
     private List<JavaEntity> typeReferences = new LinkedList<JavaEntity>();
     private List<UnresolvedVal> valueReferences = new LinkedList<UnresolvedVal>();
     private UnresolvedVal currentUnresolvedVal;
-    
+
     private boolean gotExtends; // next type spec is the superclass/superinterfaces
     private boolean gotImplements; // next type spec(s) are interfaces
     private boolean gotPermits;
@@ -138,7 +142,16 @@ public class InfoParser extends EditorParser
      */
     public InfoParser(Reader r, EntityResolver resolver)
     {
-        super(r, resolver);
+        super(r, resolver, SourceType.Java);
+    }
+
+    /**
+     * Construct an InfoParser which reads Java source using the given reader, and resolves
+     * reference via the given resolver.
+     */
+    public InfoParser(Reader r, SourceType sourceType, EntityResolver resolver)
+    {
+        super(r, resolver, sourceType);
     }
 
     /**
@@ -146,37 +159,24 @@ public class InfoParser extends EditorParser
      */
     public static ClassInfo parse(File f) throws FileNotFoundException
     {
-        return parse(f, new ClassLoaderResolver(InfoParser.class.getClassLoader()));
+        return parse(f, SourceType.Java, new ClassLoaderResolver(InfoParser.class.getClassLoader()));
     }
-    
+
+    /**
+     * Attempt to parse the specified source file. Returns null if the file could not be parsed.
+     */
+    public static ClassInfo parse(File f, SourceType sourceType) throws FileNotFoundException
+    {
+        return parse(f, sourceType, new ClassLoaderResolver(InfoParser.class.getClassLoader()));
+    }
     /**
      * Attempt to parse the specified source file, and resolve references via the specified
      * resolver. Returns null if the file could not be parsed.
      */
-    public static ClassInfo parse(File f, EntityResolver resolver) throws FileNotFoundException
+    public static ClassInfo parse(File f, SourceType sourceType, EntityResolver resolver) throws FileNotFoundException
     {
         FileInputStream fis = new FileInputStream(f);
-        ClassInfo info = parse(new BufferedReader(new InputStreamReader(fis)), resolver, null);
-        try {
-            fis.close();
-        }
-        catch (IOException ioe) {}
-        return info;
-    }
-    
-    /**
-     * Attempt to parse the specified source file, and resolve references via the specified
-     * package (and its project). Returns null if the file could not be parsed.
-     */
-    @OnThread(Tag.FXPlatform)
-    public static ClassInfo parseWithPkg(File f, Package pkg) throws FileNotFoundException
-    {
-        FileInputStream fis = new FileInputStream(f);
-        EntityResolver resolver = new PackageResolver(pkg.getProject().getEntityResolver(),
-                pkg.getQualifiedName());
-        Reader reader = new InputStreamReader(fis, pkg.getProject().getProjectCharset());
-        reader = new BufferedReader(reader);
-        ClassInfo info = parse(reader, resolver, pkg.getQualifiedName());
+        ClassInfo info = parse(new BufferedReader(new InputStreamReader(fis)), sourceType, resolver, null);
         try {
             fis.close();
         }
@@ -186,14 +186,53 @@ public class InfoParser extends EditorParser
 
     /**
      * Attempt to parse the specified source file, and resolve references via the specified
+     * resolver. Returns null if the file could not be parsed.
+     */
+    public static ClassInfo parse(File f, EntityResolver resolver) throws FileNotFoundException
+    {
+        return parse(f, SourceType.Java, resolver);
+    }
+    /**
+     * Attempt to parse the specified source file, and resolve references via the specified
+     * package (and its project). Returns null if the file could not be parsed.
+     */
+    @OnThread(Tag.FXPlatform)
+    public static ClassInfo parseWithPkg(File f, Package pkg, SourceType sourceType) throws FileNotFoundException
+    {
+        FileInputStream fis = new FileInputStream(f);
+        EntityResolver resolver = new PackageResolver(pkg.getProject().getEntityResolver(),
+                pkg.getQualifiedName());
+        Reader reader = new InputStreamReader(fis, pkg.getProject().getProjectCharset());
+        reader = new BufferedReader(reader);
+        ClassInfo info = parse(reader, sourceType, resolver, pkg.getQualifiedName());
+        try {
+            fis.close();
+        }
+        catch (IOException ioe) {}
+        return info;
+    }
+
+    /**
+     * Attempt to parse the specified source file, and resolve references via the specified
+     * package (and its project). Returns null if the file could not be parsed.
+     */
+    @OnThread(Tag.FXPlatform)
+    public static ClassInfo parseWithPkg(File f, Package pkg) throws FileNotFoundException
+    {
+        return parseWithPkg(f, pkg, SourceType.Java);
+    }
+
+
+    /**
+     * Attempt to parse the specified source file, and resolve references via the specified
      * resolver. The source should be assumed to reside in the specified package.
      * Returns null if the source could not be parsed.
      */
     @OnThread(Tag.FXPlatform)
-    public static ClassInfo parse(Reader r, EntityResolver resolver, String targetPkg)
+    public static ClassInfo parse(Reader r, SourceType sourceType, EntityResolver resolver, String targetPkg)
     {
         InfoParser infoParser = null;
-        infoParser = new InfoParser(r, resolver);
+        infoParser = new InfoParser(r, sourceType, resolver);
         infoParser.targetPkg = targetPkg;
         infoParser.parseCU();
 
@@ -204,7 +243,18 @@ public class InfoParser extends EditorParser
         }
         return null;
     }
-    
+
+    /**
+     * Attempt to parse the specified source file, and resolve references via the specified
+     * resolver. The source should be assumed to reside in the specified package.
+     * Returns null if the source could not be parsed.
+     */
+    @OnThread(Tag.FXPlatform)
+    public static ClassInfo parse(Reader r, EntityResolver resolver, String targetPkg)
+    {
+        return parse(r, SourceType.Java, resolver, targetPkg);
+    }
+
     /**
      * Resolve the method parameter and return types to their fully qualified types.
      */
@@ -215,7 +265,7 @@ public class InfoParser extends EditorParser
         for (MethodDesc md : methodDescs) {
             // Build the method signature
             String methodSig;
-            
+
             if (md.returnType != null) {
                 md.returnType = md.returnType.resolveAsType();
                 if (md.returnType == null) {
@@ -227,7 +277,7 @@ public class InfoParser extends EditorParser
                 // constructor
                 methodSig = md.name + "(";
             }
-            
+
             Iterator<JavaEntity> i = md.paramTypes.iterator();
             while (i.hasNext()) {
                 JavaEntity paramEnt = i.next();
@@ -243,13 +293,13 @@ public class InfoParser extends EditorParser
                     methodSig += ", ";
                 }
             }
-            
+
             methodSig += ")";
             md.paramNames = md.paramNames.trim();
             info.addComment(methodSig, md.javadocText, md.paramNames);
         }
     }
-    
+
     /**
      * All type references and method declarations are unresolved after parsing.
      * Call this method to resolve them.
@@ -258,7 +308,7 @@ public class InfoParser extends EditorParser
     public void resolveComments()
     {
         resolveMethodTypes();
-        
+
         // Now also resolve references
         for (JavaEntity entity: typeReferences) {
             entity = entity.resolveAsType();
@@ -269,7 +319,7 @@ public class InfoParser extends EditorParser
                 }
             }
         }
-        
+
         refloop:
         for (UnresolvedVal val: valueReferences) {
             Iterator<LocatableToken> i = val.components.iterator();
@@ -295,7 +345,7 @@ public class InfoParser extends EditorParser
                 }
             }
         }
-        
+
         if (superclassEntity != null) {
             superclassEntity = superclassEntity.resolveAsType();
             if (superclassEntity != null) {
@@ -306,7 +356,7 @@ public class InfoParser extends EditorParser
                 }
             }
         }
-        
+
         if (interfaceEntities != null && ! interfaceEntities.isEmpty()) {
             for (JavaEntity ifaceEnt : interfaceEntities) {
                 TypeEntity iEnt = ifaceEnt.resolveAsType();
@@ -334,7 +384,7 @@ public class InfoParser extends EditorParser
             }
         }
     }
-    
+
     /**
      * Add a reference to a type, and recursively process its type arguments (if any)
      */
@@ -361,7 +411,7 @@ public class InfoParser extends EditorParser
             }
         }
     }
-    
+
     /**
      * Add a reference to a type (fully-qualified type name) to the information to return.
      */
@@ -377,7 +427,7 @@ public class InfoParser extends EditorParser
             info.addUsed(name);
         }
     }
-    
+
     /**
      * Get a String describing a type as suitable for writing to the ctxt file.
      * This is the qualified, erased type name, with "." rather than "$" separating
@@ -394,7 +444,7 @@ public class InfoParser extends EditorParser
         }
         return erasedType.replace("$", ".");
     }
-    
+
     @Override
     protected void error(String msg, int beginLine, int beginColumn, int endLine, int endColumn)
     {
@@ -411,30 +461,30 @@ public class InfoParser extends EditorParser
         gotImplements = false;
         gotPermits = false;
     }
-    
+
     @Override
     protected void endTypeBody(LocatableToken token, boolean included)
     {
         super.endTypeBody(token, included);
         classLevel--;
     }
-    
+
     @Override
     protected void gotTypeSpec(List<LocatableToken> tokens)
     {
         lastTypespecToks = tokens;
         super.gotTypeSpec(tokens);
-        
+
         // Dependency tracking
         int tokpos = lineColToPosition(tokens.get(0).getLine(), tokens.get(0).getColumn());
         int topOffset = getTopNodeOffset();
         EntityResolver resolver = new PositionedResolver(scopeStack.peek(), tokpos - topOffset);
-        
+
         JavaEntity tentity = ParseUtils.getTypeEntity(resolver, currentQuerySource(), tokens);
         if (tentity != null && ! gotExtends && ! gotImplements && !gotPermits) {
             typeReferences.add(tentity);
         }
-        
+
         boolean isSuper = storeCurrentClassInfo && gotExtends && !info.isInterface();
         boolean isInterface = storeCurrentClassInfo && (gotImplements ||
                 (info.isInterface() && gotExtends));
@@ -460,8 +510,8 @@ public class InfoParser extends EditorParser
             if (interfaceEnt != null) {
                 interfaceEntities.add(interfaceEnt);
             }
-            if (tokenStream.LA(1).getType() == JavaTokenTypes.COMMA) {
-                lastCommaSelection = getSelection(tokenStream.LA(1));
+            if (getTokenStream().LA(1).getType() == JavaTokenTypes.COMMA) {
+                lastCommaSelection = getSelection(getTokenStream().LA(1));
             }
             else {
                 info.setInterfaceSelections(interfaceSelections);
@@ -490,7 +540,7 @@ public class InfoParser extends EditorParser
         super.gotMethodTypeParamsBegin();
         methodTypeParams = true;
     }
-    
+
     @Override
     protected void gotTypeParam(LocatableToken idToken)
     {
@@ -500,14 +550,14 @@ public class InfoParser extends EditorParser
             info.setTypeParametersSelection(getSelection(idToken));
         }
     }
-    
+
     @Override
     protected void endMethodTypeParams()
     {
         super.endMethodTypeParams();
         methodTypeParams = false;
     }
-    
+
     @Override
     protected void gotTypeParamBound(List<LocatableToken> tokens)
     {
@@ -517,14 +567,14 @@ public class InfoParser extends EditorParser
             typeReferences.add(ent);
         }
     }
-    
+
     @Override
     protected void gotIdentifier(LocatableToken token)
     {
         gotCompoundIdent(token);
         valueReferences.add(currentUnresolvedVal);
     }
-    
+
     @Override
     protected void gotCompoundIdent(LocatableToken token)
     {
@@ -536,14 +586,14 @@ public class InfoParser extends EditorParser
         int tokenPosition = lineColToPosition(token.getLine(), token.getColumn());
         currentUnresolvedVal.accessPosition = tokenPosition - getTopNodeOffset();
     }
-    
+
     @Override
     protected void gotCompoundComponent(LocatableToken token)
     {
         super.gotCompoundComponent(token);
         currentUnresolvedVal.components.add(token);
     }
-    
+
     @Override
     protected void completeCompoundValue(LocatableToken token)
     {
@@ -551,7 +601,7 @@ public class InfoParser extends EditorParser
         currentUnresolvedVal.components.add(token);
         valueReferences.add(currentUnresolvedVal);
     }
-    
+
     @Override
     protected void completeCompoundClass(LocatableToken token)
     {
@@ -559,10 +609,10 @@ public class InfoParser extends EditorParser
         List<LocatableToken> components = currentUnresolvedVal.components;
         components.add(token);
         Iterator<LocatableToken> i = components.iterator();
-        
+
         int tokpos = lineColToPosition(token.getLine(), token.getColumn());
         int offset = tokpos - getTopNodeOffset();
-        
+
         JavaEntity entity = UnresolvedEntity.getEntity(new PositionedResolver(scopeStack.peek(), offset),
                 i.next().getText(), currentQuerySource());
         while (entity != null && i.hasNext()) {
@@ -572,7 +622,7 @@ public class InfoParser extends EditorParser
             typeReferences.add(entity);
         }
     }
-    
+
     @Override
     protected void gotMethodDeclaration(LocatableToken token, LocatableToken hiddenToken)
     {
@@ -618,7 +668,7 @@ public class InfoParser extends EditorParser
             currentMethod.paramTypes.add(ptype);
         }
     }
-    
+
     @Override
     protected void gotArrayDeclarator()
     {
@@ -639,7 +689,8 @@ public class InfoParser extends EditorParser
     @Override
     protected void gotTypeDef(LocatableToken firstToken, int tdType)
     {
-        isPublic = modPublic;
+        // TODO: Kotlin classes are public by default. This needs to be fixed
+        isPublic = (sourceType == SourceType.Kotlin) || modPublic;
         isAbstract = modAbstract;
         comment = firstToken.getHiddenBefore() == null ? "" : firstToken.getHiddenBefore().getText();
         super.gotTypeDef(firstToken, tdType);
@@ -660,6 +711,9 @@ public class InfoParser extends EditorParser
                 info.setEnum(lastTdType == TYPEDEF_ENUM);
                 info.setInterface(lastTdType == TYPEDEF_INTERFACE);
                 info.setAbstract(isAbstract);
+                if (hasTopLevelFunction) {
+                    info.setHasTopLevelFunctions(true);
+                }
                 info.addComment(info.getName(), comment, null);
                 Selection insertSelection = new Selection(nameToken.getLine(), nameToken.getEndColumn());
                 info.setExtendsInsertSelection(insertSelection);
@@ -683,8 +737,8 @@ public class InfoParser extends EditorParser
         if (classLevel == 0 && storeCurrentClassInfo) {
             gotExtends = true;
             SourceLocation extendsStart = info.getExtendsInsertSelection().getStartLocation();
-            int extendsEndCol = tokenStream.LA(1).getColumn();
-            int extendsEndLine = tokenStream.LA(1).getLine();
+            int extendsEndCol = getTokenStream().LA(1).getColumn();
+            int extendsEndLine = getTokenStream().LA(1).getLine();
             if (extendsStart.getLine() == extendsEndLine) {
                 info.setExtendsReplaceSelection(new Selection(extendsEndLine, extendsStart.getColumn(), extendsEndCol - extendsStart.getColumn()));
             }
@@ -692,7 +746,7 @@ public class InfoParser extends EditorParser
                 info.setExtendsReplaceSelection(new Selection(extendsEndLine, extendsStart.getColumn(), extendsToken.getEndColumn() - extendsStart.getColumn()));
             }
             info.setExtendsInsertSelection(null);
-            
+
             if (info.isInterface()) {
                 interfaceSelections = new LinkedList<Selection>();
                 interfaceSelections.add(getSelection(extendsToken));
@@ -757,12 +811,32 @@ public class InfoParser extends EditorParser
             modAbstract = true;
         }
     }
-    
+
     @Override
     protected void modifiersConsumed()
     {
         modPublic = false;
         modAbstract = false;
+    }
+
+    // Flag to track if we've seen a top-level function
+    private boolean hasTopLevelFunction = false;
+
+    @Override
+    protected void gotTopLevelDecl(LocatableToken token)
+    {
+        // Check if this is a top-level function declaration
+        if (token.getType() == JavaTokenTypes.LITERAL_fun) {
+            hasTopLevelFunction = true;
+            // If we already have a ClassInfo object, set the flag on it
+            if (info == null) {
+                info = new ClassInfo();
+                info.setName("", false);
+                info.setInterface(false);
+                info.setEnum(false);
+            }
+            info.setHasTopLevelFunctions(true);
+        }
     }
 
     private Selection getSelection(LocatableToken token)

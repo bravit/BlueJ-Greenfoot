@@ -709,7 +709,9 @@ public final class Package
                 EntityResolver resolver = new PackageResolver(project.getEntityResolver(), getQualifiedName());
 
                 // Get all public class names from the file
-                List<String> publicClassNames = bluej.parser.KotlinInfoParser.getPublicClassNames(kotlinSrcFiles[i], resolver);
+                List<String> publicClassNames = List.of();
+
+                // TODO: Deal with  bluej.parser.InfoParser.getPublicClassNames(kotlinSrcFiles[i], resolver);
 
                 // Add all public class names to the set of targets and map them to the source file
                 for (String className : publicClassNames) {
@@ -718,7 +720,7 @@ public final class Package
                 }
 
                 // Check if the file has top-level functions
-                ClassInfo info = bluej.parser.KotlinInfoParser.parseWithPkg(kotlinSrcFiles[i], this);
+                ClassInfo info = bluej.parser.InfoParser.parseWithPkg(kotlinSrcFiles[i], this, SourceType.Kotlin);
                 if (info != null && info.hasTopLevelFunctions()) {
                     // Add a file facade target with the name as file name + "Kt" suffix
                     String facadeName = kotlinFileName + "Kt";
