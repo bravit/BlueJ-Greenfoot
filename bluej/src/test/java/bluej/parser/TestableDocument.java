@@ -30,10 +30,15 @@ import bluej.parser.entity.EntityResolver;
 import bluej.parser.nodes.ReparseableDocument;
 import javafx.beans.property.ReadOnlyBooleanWrapper;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class TestableDocument extends JavaSyntaxView implements ReparseableDocument
 {
     boolean parsingSuspended = false;
-    
+    private List<String> parseErrors = new ArrayList<>();
+
+
     public TestableDocument(EntityResolver entityResolver, SourceType sourceType)
     {
         super(new HoleDocument(), null, ScopeColors.dummy(), entityResolver, new ReadOnlyBooleanWrapper(true), sourceType);
@@ -66,4 +71,10 @@ public class TestableDocument extends JavaSyntaxView implements ReparseableDocum
         if (!parsingSuspended)
             super.flushReparseQueue();
     }
+
+    @Override
+    public List<String> getParseErrors() {
+        return parseErrors;
+    }
+
 }
